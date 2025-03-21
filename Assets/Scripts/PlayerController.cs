@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class PlayerController : MonoBehaviour
 {
@@ -10,7 +11,13 @@ public class PlayerController : MonoBehaviour
 
     private float velocity, groundTimer;
     private CharacterController controller;
+    private Vector3 fallingPos;
     private int init;
+    private bool falling;
+
+    public GameManager gameManager;
+    public GameObject winCamera;
+    public GameObject winText;
 
     private void Start()
     {
@@ -31,71 +38,108 @@ public class PlayerController : MonoBehaviour
             ++init;
         }
 
-        // check on ground & apply gravity
-        bool onGround = controller.isGrounded;
-        if (onGround)
+        if (falling)
         {
-            groundTimer = 0.1f;
-            if (velocity < 0)
-                velocity = 0;
+            velocity -= gravity * Time.deltaTime;
+            fallingPos.y = transform.position.y + velocity * Time.deltaTime;
+            Vector3 targetPos = Vector3.Lerp(transform.position, fallingPos, Time.deltaTime * 10);
+            targetPos.y = fallingPos.y;
+            transform.position = targetPos;
+
+            if (targetPos.y < -10)
+                SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
         else
-            groundTimer -= Time.deltaTime;
-        velocity -= gravity * Time.deltaTime;
-
-        // move
-        float vertical = Input.GetAxisRaw("Vertical");
-        float horizontal = Input.GetAxisRaw("Horizontal");
-        Vector3 move;
-
-        int dir;
-        if (vertical > 0)
-            dir = 10;
-        else if (vertical < 0)
-            dir = -10;
-        else
-            dir = 0;
-
-        if (horizontal > 0)
-            dir += 1;
-        else if (horizontal < 0)
-            dir -= 1;
-
-        if (dir != 0)
         {
-            var angle = dir switch
+            // check on ground & apply gravity
+            bool onGround = controller.isGrounded;
+            if (onGround)
             {
-                9 => -45,
-                11 => 45,
-                -1 => -90,
-                1 => 90,
-                -11 => -135,
-                -9 => 135,
-                -10 => 180,
-                _ => (float)0,
-            };
-            float speed;
-            if (Mathf.Abs(angle) >= 135)
-                speed = backwardSpeed;
+                groundTimer = 0.1f;
+                if (velocity < 0)
+                    velocity = 0;
+            }
             else
-                speed = forwardSpeed;
-            move = Quaternion.Euler(0, angle, 0) * transform.forward * speed;
+                groundTimer -= Time.deltaTime;
+            velocity -= gravity * Time.deltaTime;
+
+            // move
+            Vector3 move;
+            float vertical = Input.GetAxisRaw("Vertical");
+            float horizontal = Input.GetAxisRaw("Horizontal");
+
+            int dir;
+            if (vertical > 0)
+                dir = 10;
+            else if (vertical < 0)
+                dir = -10;
+            else
+                dir = 0;
+
+            if (horizontal > 0)
+                dir += 1;
+            else if (horizontal < 0)
+                dir -= 1;
+
+            if (dir != 0)
+            {
+                var angle = dir switch
+                {
+                    9 => -45,
+                    11 => 45,
+                    -1 => -90,
+                    1 => 90,
+                    -11 => -135,
+                    -9 => 135,
+                    -10 => 180,
+                    _ => (float)0,
+                };
+                float speed;
+                if (Mathf.Abs(angle) >= 135)
+                    speed = backwardSpeed;
+                else
+                    speed = forwardSpeed;
+                move = Quaternion.Euler(0, angle, 0) * transform.forward * speed;
+            }
+            else
+                move = Vector3.zero;
+
+            // rotate
+            transform.Rotate(0, Input.GetAxis("Mouse X") * 5 * rotateSpeed * Time.deltaTime, 0);
+
+            // jumping
+            if (groundTimer > 0 && Input.GetButtonDown("Jump"))
+            {
+                groundTimer = 0;
+                velocity += Mathf.Sqrt(jumpHeight * 2.0f * gravity);
+            }
+
+            // move controller
+            move.y = velocity;
+            controller.Move(move * Time.deltaTime);
         }
-        else
-            move = Vector3.zero;
+    }
 
-        // rotate
-        transform.Rotate(0, Input.GetAxis("Mouse X") * 5 * rotateSpeed * Time.deltaTime, 0);
+    private void OnTriggerEnter(Collider other)
+    {
+        if (falling)
+            return;
 
-        // jumping
-        if (groundTimer > 0 && Input.GetButtonDown("Jump"))
+        if (other.CompareTag("Finish"))
         {
-            groundTimer = 0;
-            velocity += Mathf.Sqrt(jumpHeight * 2.0f * gravity);
+            Camera.main.gameObject.SetActive(false);
+            winCamera.SetActive(true);
+            winText.SetActive(true);
+            gameObject.SetActive(false);
+            return;
         }
 
-        // move controller
-        move.y = velocity;
-        controller.Move(move * Time.deltaTime);
+        GameObject tile = other.gameObject.transform.parent.gameObject;
+        if (gameManager.StepOn(tile))
+        {
+            fallingPos = tile.transform.position;
+            falling = true;
+            GetComponent<Collider>().enabled = false;
+        }
     }
 }
