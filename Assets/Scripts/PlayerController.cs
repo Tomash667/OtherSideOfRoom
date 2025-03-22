@@ -18,6 +18,7 @@ public class PlayerController : MonoBehaviour
     public GameManager gameManager;
     public GameObject winCamera;
     public GameObject winText;
+    public GameObject marker;
 
     private void Start()
     {
@@ -38,16 +39,21 @@ public class PlayerController : MonoBehaviour
             ++init;
         }
 
+        // restart after falling into darkness
+        if (transform.position.y < -10)
+        {
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            return;
+        }
+
         if (falling)
         {
+            // force move into center of hole so player don't get stuck on edge
             velocity -= gravity * Time.deltaTime;
             fallingPos.y = transform.position.y + velocity * Time.deltaTime;
             Vector3 targetPos = Vector3.Lerp(transform.position, fallingPos, Time.deltaTime * 10);
             targetPos.y = fallingPos.y;
             transform.position = targetPos;
-
-            if (targetPos.y < -10)
-                SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
         else
         {
@@ -58,9 +64,20 @@ public class PlayerController : MonoBehaviour
                 groundTimer = 0.1f;
                 if (velocity < 0)
                     velocity = 0;
+                if (gameManager.CheckForTile(transform.position + transform.forward * 2.0f, marker))
+                {
+                    marker.SetActive(true);
+                    if (Input.GetMouseButtonDown(0))
+                        gameManager.DestroyTile();
+                }
+                else
+                    marker.SetActive(false);
             }
             else
+            {
                 groundTimer -= Time.deltaTime;
+                marker.SetActive(false);
+            }
             velocity -= gravity * Time.deltaTime;
 
             // move
@@ -139,6 +156,7 @@ public class PlayerController : MonoBehaviour
         {
             fallingPos = tile.transform.position;
             falling = true;
+            marker.SetActive(false);
             GetComponent<Collider>().enabled = false;
         }
     }
