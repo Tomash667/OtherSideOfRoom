@@ -16,6 +16,7 @@ public class PlayerController : MonoBehaviour
     private bool falling;
 
     public GameManager gameManager;
+    public Animator animator;
     public GameObject winCamera;
     public GameObject winText;
     public GameObject marker;
@@ -68,7 +69,10 @@ public class PlayerController : MonoBehaviour
                 {
                     marker.SetActive(true);
                     if (Input.GetMouseButtonDown(0))
+                    {
                         gameManager.DestroyTile();
+                        animator.Play("Idle_CheckWatch");
+                    }
                 }
                 else
                     marker.SetActive(false);
@@ -113,13 +117,22 @@ public class PlayerController : MonoBehaviour
                 };
                 float speed;
                 if (Mathf.Abs(angle) >= 135)
+                {
                     speed = backwardSpeed;
+                    animator.SetFloat("Speed_f", 0.4f);
+                }
                 else
+                {
                     speed = forwardSpeed;
+                    animator.SetFloat("Speed_f", 1.0f);
+                }
                 move = Quaternion.Euler(0, angle, 0) * transform.forward * speed;
             }
             else
+            {
                 move = Vector3.zero;
+                animator.SetFloat("Speed_f", 0.0f);
+            }
 
             // rotate
             transform.Rotate(0, Input.GetAxis("Mouse X") * 5 * rotateSpeed * Time.deltaTime, 0);
@@ -129,6 +142,7 @@ public class PlayerController : MonoBehaviour
             {
                 groundTimer = 0;
                 velocity += Mathf.Sqrt(jumpHeight * 2.0f * gravity);
+                animator.SetTrigger("Jump_trig");
             }
 
             // move controller
@@ -156,6 +170,7 @@ public class PlayerController : MonoBehaviour
         {
             fallingPos = tile.transform.position;
             falling = true;
+            animator.SetBool("Grounded", false);
             marker.SetActive(false);
             GetComponent<Collider>().enabled = false;
         }
