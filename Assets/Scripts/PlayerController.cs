@@ -8,9 +8,8 @@ public class PlayerController : MonoBehaviour
     private readonly float rotateSpeed = 120;
     private readonly float jumpHeight = 1.5f;
     private readonly float gravity = 9.81f * 3;
-    private readonly bool isEditor = Application.isEditor;
 
-    private float velocity, groundTimer;
+    private float velocity, groundTimer, airTimer;
     private CharacterController controller;
     private Vector3 fallingPos;
     private int init;
@@ -18,10 +17,8 @@ public class PlayerController : MonoBehaviour
 
     public GameManager gameManager;
     public Animator animator;
-    public GameObject winCamera;
-    public GameObject winText;
     public GameObject marker;
-    public ParticleSystem winParticle;
+    public AudioSource hitGround;
 
     private void Start()
     {
@@ -49,12 +46,6 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(isEditor ? KeyCode.Q : KeyCode.Escape))
-        {
-            SceneManager.LoadScene(0);
-            return;
-        }
-
         if (falling)
         {
             // force move into center of hole so player don't get stuck on edge
@@ -71,6 +62,9 @@ public class PlayerController : MonoBehaviour
             if (onGround)
             {
                 groundTimer = 0.1f;
+                if (airTimer > 0.5f)
+                    hitGround.Play();
+                airTimer = 0;
                 if (velocity < 0)
                     velocity = 0;
                 if (gameManager.CheckForTile(transform.position + transform.forward * 2.0f, marker))
@@ -88,6 +82,7 @@ public class PlayerController : MonoBehaviour
             else
             {
                 groundTimer -= Time.deltaTime;
+                airTimer += Time.deltaTime;
                 marker.SetActive(false);
             }
             velocity -= gravity * Time.deltaTime;
@@ -166,11 +161,8 @@ public class PlayerController : MonoBehaviour
 
         if (other.CompareTag("Finish"))
         {
-            Camera.main.gameObject.SetActive(false);
-            winCamera.SetActive(true);
-            winText.SetActive(true);
             gameObject.SetActive(false);
-            winParticle.Play();
+            gameManager.Win();
             return;
         }
 

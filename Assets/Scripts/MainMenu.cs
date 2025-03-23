@@ -1,15 +1,33 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class MainMenu : MonoBehaviour
 {
-    private void Start()
+    public Button level2Button, level3Button;
+
+    private void Awake()
     {
         Cursor.lockState = CursorLockMode.None;
+
+        GameData gameData = SaveLoadManager.Load();
+        level2Button.interactable = gameData.level2Unlocked;
+        level3Button.interactable = gameData.level3Unlocked;
     }
 
-    public void StartGame()
+    private void Update()
     {
-        SceneManager.LoadScene(1);
+#if UNITY_EDITOR
+        if (Input.GetKeyDown(KeyCode.Q))
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+        if (Input.GetKeyDown(KeyCode.Escape))
+            Application.Quit(0);
+#endif
+    }
+
+    public void StartGame(int level)
+    {
+        SceneManager.LoadScene(level);
     }
 }

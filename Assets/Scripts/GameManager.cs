@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
@@ -13,6 +14,9 @@ public class GameManager : MonoBehaviour
 
     public GameObject baseTile, collapsingTile, collapsingTrap, dustParticle;
     public GameObject[] numbers;
+    public GameObject winCamera;
+    public GameObject winText;
+    public ParticleSystem winParticle;
     public int width, height, traps;
 
     private Tile[] tiles;
@@ -36,6 +40,15 @@ public class GameManager : MonoBehaviour
     {
         CreateTiles();
         InitLevel();
+    }
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(Application.isEditor ? KeyCode.Q : KeyCode.Escape))
+        {
+            SceneManager.LoadScene(0);
+            return;
+        }
     }
 
     private void CreateTiles()
@@ -246,5 +259,33 @@ public class GameManager : MonoBehaviour
         }
 
         Debug.Log($"Solved in {pass - 1} passes, removed traps {removedTraps}");
+    }
+
+    public void Win()
+    {
+        // play fanfare & particle
+        GetComponent<AudioSource>().Play();
+        winParticle.Play();
+        // set camera to look at reward
+        Camera.main.gameObject.SetActive(false);
+        winCamera.SetActive(true);
+        // show win ui
+        winText.SetActive(true);
+        // unlock next level
+        int level = SceneManager.GetActiveScene().buildIndex;
+        if (level != 3)
+        {
+            GameData gameData = SaveLoadManager.Load();
+            if (level == 1 && !gameData.level2Unlocked)
+            {
+                gameData.level2Unlocked = true;
+                SaveLoadManager.Save(gameData);
+            }
+            else if (level == 2 && !gameData.level3Unlocked)
+            {
+                gameData.level3Unlocked = true;
+                SaveLoadManager.Save(gameData);
+            }
+        }
     }
 }
