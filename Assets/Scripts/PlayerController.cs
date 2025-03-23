@@ -8,6 +8,7 @@ public class PlayerController : MonoBehaviour
     private readonly float rotateSpeed = 120;
     private readonly float jumpHeight = 1.5f;
     private readonly float gravity = 9.81f * 3;
+    private readonly bool isEditor = Application.isEditor;
 
     private float velocity, groundTimer;
     private CharacterController controller;
@@ -45,6 +46,12 @@ public class PlayerController : MonoBehaviour
         if (transform.position.y < -10)
         {
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            return;
+        }
+
+        if (Input.GetKeyDown(isEditor ? KeyCode.Q : KeyCode.Escape))
+        {
+            SceneManager.LoadScene(0);
             return;
         }
 
