@@ -6,7 +6,7 @@ public class PlayerController : MonoBehaviour
     private readonly float forwardSpeed = 10;
     private readonly float backwardSpeed = 5;
     private readonly float rotateSpeed = 120;
-    private readonly float jumpHeight = 2.0f;
+    private readonly float jumpHeight = 1.5f;
     private readonly float gravity = 9.81f * 3;
 
     private float velocity, groundTimer;
@@ -20,6 +20,7 @@ public class PlayerController : MonoBehaviour
     public GameObject winCamera;
     public GameObject winText;
     public GameObject marker;
+    public ParticleSystem winParticle;
 
     private void Start()
     {
@@ -162,6 +163,7 @@ public class PlayerController : MonoBehaviour
             winCamera.SetActive(true);
             winText.SetActive(true);
             gameObject.SetActive(false);
+            winParticle.Play();
             return;
         }
 

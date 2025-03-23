@@ -11,7 +11,7 @@ public class GameManager : MonoBehaviour
         public bool known, missing;
     }
 
-    public GameObject baseTile;
+    public GameObject baseTile, collapsingTile, collapsingTrap, dustParticle;
     public GameObject[] numbers;
     public int width, height, traps;
 
@@ -121,6 +121,8 @@ public class GameManager : MonoBehaviour
         Tile tile = tiles[tileInfo.x + tileInfo.y * width];
         if (tile.value == TRAP)
         {
+            Instantiate(collapsingTrap, gameObject.transform.position, gameObject.transform.rotation);
+            Instantiate(dustParticle, gameObject.transform.position, dustParticle.transform.rotation);
             Destroy(gameObject);
             return true;
         }
@@ -169,6 +171,8 @@ public class GameManager : MonoBehaviour
     {
         Tile tile = tiles[markerPos.x + markerPos.y * width];
         tile.missing = true;
+        Instantiate(tile.value == TRAP ? collapsingTrap : collapsingTile, tile.gameObject.transform.position, tile.gameObject.transform.rotation);
+        Instantiate(dustParticle, tile.gameObject.transform.position, dustParticle.transform.rotation);
         Destroy(tile.gameObject);
     }
 
