@@ -72,7 +72,7 @@ public class PlayerController : MonoBehaviour
                     marker.SetActive(true);
                     if (Input.GetMouseButtonDown(0))
                     {
-                        gameManager.DestroyTile();
+                        gameManager.DestroyMarkedTile();
                         animator.Play("Idle_CheckWatch");
                     }
                 }
@@ -151,6 +151,8 @@ public class PlayerController : MonoBehaviour
             // move controller
             move.y = velocity;
             controller.Move(move * Time.deltaTime);
+            if (transform.position.y < 0.5f)
+                animator.SetBool("Grounded", false);
         }
     }
 

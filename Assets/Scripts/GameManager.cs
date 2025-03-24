@@ -5,11 +5,51 @@ using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
+    enum TileDir
+    {
+        LeftBottom,
+        Left,
+        LeftTop,
+        Bottom,
+        Top,
+        RightBottom,
+        Right,
+        RightTop
+    }
+
     class Tile
     {
         public GameObject gameObject;
         public int x, y, value;
         public bool known, missing;
+    }
+
+    class TileSolver
+    {
+        public Tile[] tiles;
+
+        public Tile GetTile(TileDir dir)
+        {
+            return tiles[(int)dir];
+        }
+
+        public bool IsUnknown(TileDir dir)
+        {
+            Tile tile = tiles[(int)dir];
+            return tile != null && !tile.known;
+        }
+
+        public bool IsKnown(TileDir dir)
+        {
+            Tile tile = tiles[(int)dir];
+            return tile != null && tile.known;
+        }
+
+        public bool IsKnownOrOutside(TileDir dir)
+        {
+            Tile tile = tiles[(int)dir];
+            return tile == null || tile.known;
+        }
     }
 
     public GameObject baseTile, collapsingTile, collapsingTrap, dustParticle;
@@ -79,38 +119,54 @@ public class GameManager : MonoBehaviour
     {
         int count = width * height;
 
-        // place traps
-        for (int i = 0; i < traps; ++i)
+        while (true)
         {
-            while (true)
+            // place traps
+            for (int i = 0; i < traps; ++i)
             {
-                int index = Random.Range(0, count);
-                if (tiles[index].value != TRAP)
+                while (true)
                 {
-                    tiles[index].value = TRAP;
-                    break;
+                    int index = Random.Range(0, count);
+                    if (tiles[index].value != TRAP)
+                    {
+                        tiles[index].value = TRAP;
+                        break;
+                    }
                 }
             }
-        }
 
-        // calculate values
-        for (int y = 0; y < height; ++y)
-        {
-            for (int x = 0; x < width; ++x)
+            // calculate values
+            for (int y = 0; y < height; ++y)
             {
-                Tile tile = tiles[x + y * width];
-                if (tile.value != TRAP)
-                    tile.value = GetNearbyTraps(tile);
+                for (int x = 0; x < width; ++x)
+                {
+                    Tile tile = tiles[x + y * width];
+                    if (tile.value != TRAP)
+                        tile.value = GetNearbyTraps(tile);
+                }
             }
+
+            // solve and if failed regenerate
+            if (!Solve())
+            {
+                for (int i = 0; i < count; ++i)
+                {
+                    Tile tile = tiles[i];
+                    tile.known = false;
+                    tile.value = 0;
+                }
+                continue;
+            }
+
+            // revert state after solving
+            for (int i = 0; i < count; ++i)
+                tiles[i].known = false;
+
+            // reveal first row
+            for (int x = 0; x < width; ++x)
+                Reveal(tiles[x]);
+            break;
         }
-
-        Solve();
-        for (int i = 0; i < count; ++i)
-            tiles[i].known = false;
-
-        // reveal first row
-        for (int x = 0; x < width; ++x)
-            Reveal(tiles[x]);
     }
 
     private IEnumerable<Tile> GetNearbyTiles(Tile tile)
@@ -123,9 +179,42 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private TileSolver GetNearbyTilesAll(Tile tile)
+    {
+        Tile[] result = new Tile[8];
+        if (tile.x > 0)
+        {
+            if (tile.y > 0)
+                result[(int)TileDir.LeftBottom] = tiles[tile.x - 1 + (tile.y - 1) * width];
+            result[(int)TileDir.Left] = tiles[tile.x - 1 + tile.y * width];
+            if (tile.y < height - 1)
+                result[(int)TileDir.LeftTop] = tiles[tile.x - 1 + (tile.y + 1) * width];
+        }
+        if (tile.y > 0)
+            result[(int)TileDir.Bottom] = tiles[tile.x + (tile.y - 1) * width];
+        if (tile.y < height - 1)
+            result[(int)TileDir.Top] = tiles[tile.x + (tile.y + 1) * width];
+        if (tile.x < width - 1)
+        {
+            if (tile.y > 0)
+                result[(int)TileDir.RightBottom] = tiles[tile.x + 1 + (tile.y - 1) * width];
+            result[(int)TileDir.Right] = tiles[tile.x + 1 + tile.y * width];
+            if (tile.y < height - 1)
+                result[(int)TileDir.RightTop] = tiles[tile.x + 1 + (tile.y + 1) * width];
+        }
+        return new TileSolver { tiles = result };
+    }
+
     private int GetNearbyTraps(Tile tile)
     {
         return GetNearbyTiles(tile).Count(t => t.value == TRAP);
+    }
+
+    private int GetNearbyUnknownTraps(Tile tile)
+    {
+        if (tile.value == TRAP)
+            return -1;
+        return GetNearbyTiles(tile).Count(t => !t.known && t.value == TRAP);
     }
 
     public bool StepOn(GameObject gameObject)
@@ -134,13 +223,20 @@ public class GameManager : MonoBehaviour
         Tile tile = tiles[tileInfo.x + tileInfo.y * width];
         if (tile.value == TRAP)
         {
-            Instantiate(collapsingTrap, gameObject.transform.position, gameObject.transform.rotation);
-            Instantiate(dustParticle, gameObject.transform.position, dustParticle.transform.rotation);
-            Destroy(gameObject);
+            // step on trap, collapse
+            DestroyTile(tile);
             return true;
         }
         else if (!tile.known)
+        {
+            if (!GetNearbyTiles(tile).Any(t => t.known))
+            {
+                // jumped on unknown tile with no known tiles next to it, always collapse
+                DestroyTile(tile);
+                return true;
+            }
             Reveal(tile);
+        }
         return false;
     }
 
@@ -157,6 +253,12 @@ public class GameManager : MonoBehaviour
             Destroy(tile.gameObject);
             tile.missing = true;
         }
+    }
+
+    private void SolveReveal(Tile tile)
+    {
+        tile.known = true;
+        //Reveal(tile);
     }
 
     public bool CheckForTile(Vector3 pos, GameObject marker)
@@ -180,28 +282,31 @@ public class GameManager : MonoBehaviour
             return false;
     }
 
-    public void DestroyTile()
+    public void DestroyMarkedTile()
     {
-        Tile tile = tiles[markerPos.x + markerPos.y * width];
+        DestroyTile(tiles[markerPos.x + markerPos.y * width]);
+    }
+
+    private void DestroyTile(Tile tile)
+    {
         tile.missing = true;
         Instantiate(tile.value == TRAP ? collapsingTrap : collapsingTile, tile.gameObject.transform.position, tile.gameObject.transform.rotation);
         Instantiate(dustParticle, tile.gameObject.transform.position, dustParticle.transform.rotation);
         Destroy(tile.gameObject);
     }
 
-    private void Solve()
+    private bool Solve()
     {
         List<Tile> toCheck = new(), toCheckNew = new();
         for (int x = 0; x < width; ++x)
         {
             Tile tile = tiles[x];
-            tile.known = true;
-            //Reveal(tile);
-            if(tile.value != TRAP)
+            SolveReveal(tile);
+            if (tile.value != TRAP)
                 toCheck.Add(tile);
         }
 
-        int pass = 1, removedTraps = 0;
+        int pass = 0, removedTraps = 0;
         while (toCheck.Count > 0)
         {
             bool anything = false;
@@ -228,9 +333,8 @@ public class GameManager : MonoBehaviour
                     // all unknown tiles have traps, reveal them
                     foreach (Tile tile2 in GetNearbyTiles(tile).Where(t => !t.known))
                     {
-                        tile2.known = true;
-                        //Reveal(tile2);
-                        if(tile2.value != TRAP)
+                        SolveReveal(tile2);
+                        if (tile2.value != TRAP)
                             toCheckNew.Add(tile2);
                     }
                     anything = true;
@@ -242,6 +346,198 @@ public class GameManager : MonoBehaviour
                 }
             }
 
+            if (!anything)
+            {
+                (toCheck, toCheckNew) = (toCheckNew, toCheck);
+                toCheckNew.Clear();
+                foreach (Tile tile in toCheck)
+                {
+                    if (GetNearbyUnknownTraps(tile) == 2)
+                    {
+                        TileSolver s = GetNearbyTilesAll(tile);
+                        int doneSomething = 0; // 1-partial, 2-fully solved
+
+                        // ???
+                        // k2k
+                        // xxx
+                        if (s.IsUnknown(TileDir.LeftTop) && s.IsUnknown(TileDir.Top) && s.IsUnknown(TileDir.RightTop)
+                            && s.IsKnown(TileDir.Left) && s.IsKnown(TileDir.Right)
+                            && s.IsKnownOrOutside(TileDir.LeftBottom) && s.IsKnownOrOutside(TileDir.Bottom) && s.IsKnownOrOutside(TileDir.RightBottom))
+                        {
+                            int leftUnknownTraps = GetNearbyUnknownTraps(s.GetTile(TileDir.Left));
+                            int rightUnknownTraps = GetNearbyUnknownTraps(s.GetTile(TileDir.Right));
+                            if (leftUnknownTraps == 1 && rightUnknownTraps == 1)
+                            {
+                                // safe tile between two traps
+                                // TST
+                                // 121
+                                Tile t = s.GetTile(TileDir.Top);
+                                SolveReveal(t);
+                                toCheckNew.Add(t);
+                                SolveReveal(s.GetTile(TileDir.LeftTop));
+                                SolveReveal(s.GetTile(TileDir.RightTop));
+                                doneSomething = 2;
+                            }
+                            else if (leftUnknownTraps == 1)
+                            {
+                                // trap on right
+                                // ??T
+                                // 12k
+                                SolveReveal(s.GetTile(TileDir.RightTop));
+                                doneSomething = 1;
+                            }
+                            else if (rightUnknownTraps == 1)
+                            {
+                                // trap on left
+                                // T??
+                                // k21
+                                SolveReveal(s.GetTile(TileDir.LeftTop));
+                                doneSomething = 1;
+                            }
+                        }
+
+                        // xxx
+                        // k2k
+                        // ???
+                        if (doneSomething == 0
+                            && s.IsUnknown(TileDir.LeftBottom) && s.IsUnknown(TileDir.Bottom) && s.IsUnknown(TileDir.RightBottom)
+                            && s.IsKnown(TileDir.Left) && s.IsKnown(TileDir.Right)
+                            && s.IsKnownOrOutside(TileDir.LeftTop) && s.IsKnownOrOutside(TileDir.Top) && s.IsKnownOrOutside(TileDir.RightTop))
+                        {
+                            int leftUnknownTraps = GetNearbyUnknownTraps(s.GetTile(TileDir.Left));
+                            int rightUnknownTraps = GetNearbyUnknownTraps(s.GetTile(TileDir.Right));
+                            if (leftUnknownTraps == 1 && rightUnknownTraps == 1)
+                            {
+                                // safe tile between two traps
+                                // 121
+                                // STS
+                                Tile t = s.GetTile(TileDir.Bottom);
+                                SolveReveal(t);
+                                toCheckNew.Add(t);
+                                SolveReveal(s.GetTile(TileDir.LeftBottom));
+                                SolveReveal(s.GetTile(TileDir.RightBottom));
+                                doneSomething = 2;
+                            }
+                            else if (leftUnknownTraps == 1)
+                            {
+                                // trap on right
+                                // 12k
+                                // ??T
+                                SolveReveal(s.GetTile(TileDir.RightBottom));
+                                doneSomething = 1;
+                            }
+                            else if (rightUnknownTraps == 1)
+                            {
+                                // trap on left
+                                // k21
+                                // T??
+                                SolveReveal(s.GetTile(TileDir.LeftBottom));
+                                doneSomething = 1;
+                            }
+                        }
+
+                        // ?kx
+                        // ?2x
+                        // ?kx
+                        if (doneSomething == 0
+                            && s.IsUnknown(TileDir.LeftTop) && s.IsUnknown(TileDir.Left) && s.IsUnknown(TileDir.LeftBottom)
+                            && s.IsKnown(TileDir.Top) && s.IsKnown(TileDir.Bottom)
+                            && s.IsKnownOrOutside(TileDir.RightTop) && s.IsKnownOrOutside(TileDir.Right) && s.IsKnownOrOutside(TileDir.RightBottom))
+                        {
+                            int topUnknownTraps = GetNearbyUnknownTraps(s.GetTile(TileDir.Top));
+                            int bottomUnknownTraps = GetNearbyUnknownTraps(s.GetTile(TileDir.Bottom));
+                            if (topUnknownTraps == 1 && bottomUnknownTraps == 1)
+                            {
+                                // safe tile between two traps
+                                // T1
+                                // S2
+                                // T1
+                                Tile t = s.GetTile(TileDir.Left);
+                                SolveReveal(t);
+                                toCheckNew.Add(t);
+                                SolveReveal(s.GetTile(TileDir.LeftTop));
+                                SolveReveal(s.GetTile(TileDir.LeftBottom));
+                                doneSomething = 2;
+                            }
+                            else if (topUnknownTraps == 1)
+                            {
+                                // trap on bottom
+                                // ?1
+                                // ?2
+                                // Tk
+                                SolveReveal(s.GetTile(TileDir.LeftBottom));
+                                doneSomething = 1;
+                            }
+                            else if (bottomUnknownTraps == 1)
+                            {
+                                // trap on top
+                                // Tk
+                                // ?2
+                                // ?1
+                                SolveReveal(s.GetTile(TileDir.LeftTop));
+                                doneSomething = 1;
+                            }
+                        }
+
+                        // xk?
+                        // x2?
+                        // xk?
+                        if (doneSomething == 0
+                            && s.IsUnknown(TileDir.RightTop) && s.IsUnknown(TileDir.Right) && s.IsUnknown(TileDir.RightBottom)
+                            && s.IsKnown(TileDir.Top) && s.IsKnown(TileDir.Bottom)
+                            && s.IsKnownOrOutside(TileDir.LeftTop) && s.IsKnownOrOutside(TileDir.Left) && s.IsKnownOrOutside(TileDir.LeftBottom))
+                        {
+                            int topUnknownTraps = GetNearbyUnknownTraps(s.GetTile(TileDir.Top));
+                            int bottomUnknownTraps = GetNearbyUnknownTraps(s.GetTile(TileDir.Bottom));
+                            if (topUnknownTraps == 1 && bottomUnknownTraps == 1)
+                            {
+                                // safe tile between two traps
+                                // 1T
+                                // 2S
+                                // 1T
+                                Tile t = s.GetTile(TileDir.Right);
+                                SolveReveal(t);
+                                toCheckNew.Add(t);
+                                SolveReveal(s.GetTile(TileDir.RightTop));
+                                SolveReveal(s.GetTile(TileDir.RightBottom));
+                                doneSomething = 2;
+                            }
+                            else if (topUnknownTraps == 1)
+                            {
+                                // trap on bottom
+                                // 1?
+                                // 2?
+                                // kT
+                                SolveReveal(s.GetTile(TileDir.RightBottom));
+                                doneSomething = 1;
+                            }
+                            else if (bottomUnknownTraps == 1)
+                            {
+                                // trap on top
+                                // kT
+                                // 2?
+                                // 1?
+                                SolveReveal(s.GetTile(TileDir.RightTop));
+                                doneSomething = 1;
+                            }
+                        }
+
+                        if (doneSomething > 0)
+                        {
+                            Debug.Log($"Algo2 {doneSomething} ({tile.x},{tile.y}) pass:{pass}");
+                            anything = true;
+                        }
+                        if (doneSomething < 2)
+                            toCheckNew.Add(tile);
+                    }
+                    else
+                    {
+                        // can't guess
+                        toCheckNew.Add(tile);
+                    }
+                }
+            }
+            
             if (!anything)
             {
                 // need better algorithm :P
@@ -258,7 +554,16 @@ public class GameManager : MonoBehaviour
             ++pass;
         }
 
-        Debug.Log($"Solved in {pass - 1} passes, removed traps {removedTraps}");
+        if (tiles.All(t => t.known))
+        {
+            Debug.Log($"Solved in {pass} passes, removed traps {removedTraps}");
+            return true;
+        }
+        else
+        {
+            Debug.LogWarning($"Failed to solve after {pass} passes, removed traps {removedTraps}");
+            return false;
+        }
     }
 
     public void Win()
